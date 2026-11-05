@@ -1,0 +1,21 @@
+# Build output
+bin/
+obj/
+
+# SQLite database (recreated and seeded on first run)
+*.db
+*.db-shm
+*.db-wal
+
+# Local attachment uploads (LocalFileStorage)
+App_Data/
+
+# IDE / user files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Local publish output
+publish/

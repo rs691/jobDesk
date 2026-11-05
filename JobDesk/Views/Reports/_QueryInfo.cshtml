@@ -1,0 +1,28 @@
+@model QueryInfo
+
+<div class="card-footer bg-white small">
+    <div class="d-flex flex-wrap gap-3 mb-2">
+        <div><span class="text-muted">Stored procedure:</span> <code>@Model.ProcName</code></div>
+        <div><span class="text-muted">Provider:</span> @Model.Provider</div>
+        <div><span class="text-muted">Returns:</span> @Model.Returns</div>
+    </div>
+    @if (Model.CalledStoredProcedure)
+    {
+        <div class="text-success mb-2">Ran on SQL Server by calling <code>EXEC @Model.ProcName</code>.</div>
+    }
+    else
+    {
+        <div class="text-body-secondary mb-2">
+            SQLite has no stored procedures, so this ran the same SELECT inline from <code>JobService</code>.
+            With <code>Database:Provider = SqlServer</code> the app calls <code>EXEC @Model.ProcName</code> instead.
+        </div>
+    }
+    <details>
+        <summary>SQL that ran</summary>
+        <pre class="bg-dark text-light p-3 rounded mt-2 mb-2"><code>@Model.ExecutedSql</code></pre>
+    </details>
+    <details>
+        <summary>Stored procedure definition (<code>sql/stored-procedures.sql</code>)</summary>
+        <pre class="bg-dark text-light p-3 rounded mt-2 mb-0"><code>@Model.ProcDefinition</code></pre>
+    </details>
+</div>

@@ -1,0 +1,25 @@
+@model WorkOrder
+
+<div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<div class="mb-3">
+    <label asp-for="Title" class="form-label"></label>
+    <input asp-for="Title" class="form-control" />
+    <span asp-validation-for="Title" class="text-danger small"></span>
+</div>
+<div class="row">
+    <div class="col-md-5 mb-3">
+        <label asp-for="CustomerId" class="form-label"></label>
+        <select asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-select">
+            <option value="0">— pick a customer —</option>
+        </select>
+        <span asp-validation-for="CustomerId" class="text-danger small"></span>
+    </div>
+    <div class="col-md-3 mb-3">
+        <label asp-for="Status" class="form-label"></label>
+        <select asp-for="Status" asp-items="Html.GetEnumSelectList<WorkOrderStatus>()" class="form-select"></select>
+    </div>
+    <div class="col-md-4 mb-3">
+        <label asp-for="ScheduledDate" class="form-label"></label>
+        <input asp-for="ScheduledDate" class="form-control" />
+    </div>
+</div>
