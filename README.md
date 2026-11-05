@@ -38,6 +38,7 @@ Each profile only sets `ASPNETCORE_ENVIRONMENT`, which loads `appsettings.SqlSer
 - Every page shows a "Read-only public demo" banner, and the New, Edit, Upload, and Delete controls are hidden.
 - To verify, run `scripts/demo-smoke-test.sh <base-url>`. It checks the GET pages, then sends every create/edit/upload/delete endpoint with a valid antiforgery token, plus PUT/PATCH/DELETE, and confirms 403s and unchanged data.
 - **Hosting:** see [DEPLOY-AWS-LAMBDA.md](DEPLOY-AWS-LAMBDA.md) (.NET 8 Lambda + Function URL). For a beginner walkthrough of every part, see [EXPLAIN.md](EXPLAIN.md).
+- **CI/CD:** GitHub Actions builds and smoke-tests every pull request, and deploys `main` to the Lambda demo. See [CI-CD.md](CI-CD.md).
 
 ## What's where
 

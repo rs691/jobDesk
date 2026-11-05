@@ -1,6 +1,6 @@
 # Deploying the read-only demo to AWS Lambda
 
-This puts the **read-only public demo** on AWS Lambda behind a **Lambda Function URL**. Nothing here has been deployed yet, and no AWS resources were created while preparing it.
+This puts the **read-only public demo** on AWS Lambda behind a **Lambda Function URL**. The steps below are for creating the function the first time. After that, code updates go through GitHub Actions; see [CI-CD.md](CI-CD.md).
 
 **What the hosted demo is:** made-up sample data in a SQLite file under `/tmp`, re-seeded on every cold start. Every POST/PUT/PATCH/DELETE request is refused with a 403. It's ephemeral and for demos only. It is **not** a production database, and it uses **no** S3, RDS, or SQL Server.
 
