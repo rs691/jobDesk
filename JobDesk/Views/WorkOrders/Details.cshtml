@@ -1,0 +1,114 @@
+@model WorkOrder
+@{
+    ViewData["Title"] = $"Work order #{Model.Id}";
+    var materialTotal = Model.Materials.Sum(m => m.Quantity * (m.Material?.UnitCost ?? 0));
+}
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
+    <div>
+        <div class="text-muted small">Work order #@Model.Id</div>
+        <h1 class="h3 mb-1">@Model.Title</h1>
+        <div>
+            <span class="badge text-bg-secondary">@Model.Status</span>
+            <span class="ms-2">@Model.Customer?.Name</span>
+            <span class="text-muted ms-2">Scheduled @(Model.ScheduledDate?.ToString("MMM d, yyyy") ?? "—")</span>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        @if (!DemoMode.ReadOnly)
+        {
+            <a class="btn btn-outline-secondary" asp-action="Edit" asp-route-id="@Model.Id">Edit</a>
+        }
+        <a class="btn btn-link" asp-action="Index">Back to list</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header bg-white fw-semibold">Materials</div>
+            @if (Model.Materials.Count == 0)
+            {
+                <div class="card-body text-muted small">No materials picked yet.</div>
+            }
+            else
+            {
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Material</th><th class="text-end">Qty</th><th class="text-end">Cost</th></tr></thead>
+                    <tbody>
+                        @foreach (var line in Model.Materials)
+                        {
+                            <tr>
+                                <td>@line.Material?.Name</td>
+                                <td class="text-end">@line.Quantity.ToString("0.##") @line.Material?.Unit</td>
+                                <td class="text-end">$@((line.Quantity * (line.Material?.UnitCost ?? 0)).ToString("N2"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr class="fw-semibold"><td colspan="2">Total</td><td class="text-end">$@materialTotal.ToString("N2")</td></tr></tfoot>
+                </table>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">Photos &amp; files</span>
+                <span class="badge text-bg-dark" title="Configured with Storage:Provider">Storage: @ViewBag.StorageProvider</span>
+            </div>
+            <div class="card-body">
+                @if (DemoMode.ReadOnly)
+                {
+                    <div class="alert alert-secondary small">Uploads are turned off in the public demo. Locally, files are saved through <code>IFileStorage</code> (a local folder, or S3 with a config change).</div>
+                }
+                else
+                {
+                <form asp-action="Upload" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 mb-3">
+                    <input type="file" name="file" class="form-control" style="max-width: 360px"
+                           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" required aria-label="Choose a photo or PDF" />
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                    <div class="form-text w-100 mt-0">JPG, PNG, GIF, WEBP, or PDF up to 5 MB.</div>
+                </form>
+                }
+
+                @if (Model.Attachments.Count == 0)
+                {
+                    <div class="text-muted small">No attachments yet. Upload a site photo or a signed estimate.</div>
+                }
+                else
+                {
+                    <div class="row g-3">
+                        @foreach (var a in Model.Attachments)
+                        {
+                            <div class="col-sm-6">
+                                <div class="border rounded p-2 h-100 d-flex flex-column">
+                                    @if (a.IsImage)
+                                    {
+                                        <a asp-action="Attachment" asp-route-id="@a.Id" target="_blank">
+                                            <img src="@Url.Action("Attachment", new { id = a.Id })" alt="@a.FileName" class="img-fluid rounded mb-2" style="max-height: 160px; object-fit: cover; width: 100%" />
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a asp-action="Attachment" asp-route-id="@a.Id" class="d-block bg-light rounded text-center py-4 mb-2 text-decoration-none">PDF</a>
+                                    }
+                                    <div class="small text-truncate" title="@a.FileName">@a.FileName</div>
+                                    <div class="small text-muted">@(a.SizeBytes < 1024 ? $"{a.SizeBytes} bytes" : $"{a.SizeBytes / 1024.0:N0} KB") · @a.UploadedAt.ToLocalTime().ToString("MMM d, h:mm tt")</div>
+                                    <div class="small text-muted text-truncate" title="@a.StorageKey">Key: @a.StorageKey</div>
+                                    @if (!DemoMode.ReadOnly)
+                                    {
+                                    <form asp-action="DeleteAttachment" asp-route-id="@a.Id" method="post" class="mt-auto pt-2"
+                                          onsubmit="return confirm('Delete this attachment?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    </form>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

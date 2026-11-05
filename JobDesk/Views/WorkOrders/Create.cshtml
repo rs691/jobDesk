@@ -1,0 +1,13 @@
+@model WorkOrder
+@{
+    ViewData["Title"] = "New work order";
+}
+
+<h1 class="h3 mb-3">New work order</h1>
+<form asp-action="Create" method="post" class="bg-white border rounded p-3" style="max-width: 720px">
+    <partial name="_Form" model="Model" />
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a asp-action="Index" class="btn btn-link">Cancel</a>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

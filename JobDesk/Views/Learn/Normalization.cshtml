@@ -1,0 +1,225 @@
+@model NormalizationViewModel
+@{
+    ViewData["Title"] = "Normalization";
+    var flat = Model.FlatLines;
+    var byWorkOrder = flat.GroupBy(l => l.WorkOrderId).ToList();
+    var customersById = Model.Customers.ToDictionary(c => c.Id);
+    var materialsById = Model.Materials.ToDictionary(m => m.Id);
+
+    // Live numbers for the "update anomaly" talking point.
+    var busiest = flat.GroupBy(l => l.CustomerName).OrderByDescending(g => g.Count()).First();
+    var seenCustomer = new HashSet<string>();
+    var seenMaterial = new HashSet<string>();
+    string Money(decimal? v) => v is null ? "" : "$" + v.Value.ToString("N2");
+}
+
+<h1 class="h3 mb-1">Normalization, using JobDesk's own data</h1>
+<p class="text-muted">
+    Every table on this page is built from the live database. The "before" tables are what you'd get
+    if all of this lived in one spreadsheet. The "after" tables are the real JobDesk schema.
+    Edit a customer's phone on the Customers page and reload to watch it change in one place.
+</p>
+
+@* ---------- Step 0 ---------- *@
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <span class="badge text-bg-danger me-2">Before</span><strong>One spreadsheet row per work order</strong>
+    </div>
+    <div class="card-body pb-0 small">
+        <p>
+            This is how a job list often starts out. The <em>Materials</em> cell holds a list, so you can't
+            sum quantities, filter by material, or join on it without parsing text.
+        </p>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered small mb-0">
+            <thead class="table-light">
+                <tr><th>WO</th><th>Title</th><th>Customer</th><th>Phone</th><th>City</th><th>Materials</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var g in byWorkOrder)
+                {
+                    var first = g.First();
+                    var lines = g.Where(l => l.MaterialName != null).ToList();
+                    <tr>
+                        <td>@first.WorkOrderId</td>
+                        <td>@first.WorkOrderTitle</td>
+                        <td>@first.CustomerName</td>
+                        <td>@first.CustomerPhone</td>
+                        <td>@first.CustomerCity</td>
+                        <td class="bg-danger-subtle">@(lines.Count == 0 ? "" : string.Join("; ", lines.Select(l => $"{l.MaterialName} x{l.Quantity:0.##} @ {Money(l.UnitCost)}")))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@* ---------- 1NF ---------- *@
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <span class="badge text-bg-warning me-2">1NF</span><strong>Atomic values: one row per material line</strong>
+    </div>
+    <div class="card-body pb-0 small">
+        <p class="mb-2">
+            <strong>Rule:</strong> every cell holds one value and there are no repeating groups.
+            Split the material list so each line is its own row. The key is now <code>(WorkOrderId, Material)</code>.
+        </p>
+        <p>
+            <strong>New problem:</strong> customer and material facts are copied onto every line (highlighted).
+            <strong>@busiest.Key</strong>'s phone and city are stored <strong>@busiest.Count()</strong> times here, but only once in
+            <code>Customers</code>. Change the phone and you have to update @busiest.Count() rows. Miss one and the data disagrees with itself.
+            That's an <em>update anomaly</em>.
+        </p>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered small mb-0">
+            <thead class="table-light">
+                <tr><th>WO</th><th>Title</th><th>Status</th><th>Customer</th><th>Phone</th><th>City</th><th>Material</th><th class="text-end">Unit cost</th><th class="text-end">Qty</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var l in flat)
+                {
+                    var repeatCustomer = !seenCustomer.Add(l.CustomerName);
+                    var repeatMaterial = l.MaterialName != null && !seenMaterial.Add(l.MaterialName);
+                    var c = repeatCustomer ? "bg-warning-subtle" : "";
+                    var m = repeatMaterial ? "bg-warning-subtle" : "";
+                    <tr>
+                        <td>@l.WorkOrderId</td>
+                        <td>@l.WorkOrderTitle</td>
+                        <td>@l.Status</td>
+                        <td class="@c">@l.CustomerName</td>
+                        <td class="@c">@l.CustomerPhone</td>
+                        <td class="@c">@l.CustomerCity</td>
+                        <td class="@m">@l.MaterialName</td>
+                        <td class="@m text-end">@Money(l.UnitCost)</td>
+                        <td class="text-end">@l.Quantity?.ToString("0.##")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@* ---------- 2NF + 3NF explanation ---------- *@
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-white"><span class="badge text-bg-info me-2">2NF</span><strong>No partial dependencies</strong></div>
+            <div class="card-body small">
+                <p><strong>Rule:</strong> 1NF, and every non-key column depends on the <em>whole</em> key, not just part of it.</p>
+                <p>The key is <code>(WorkOrderId, MaterialId)</code>, but:</p>
+                <ul>
+                    <li><code>Title</code>, <code>Status</code>, and the customer columns depend only on <code>WorkOrderId</code>. They move to <strong>WorkOrders</strong>.</li>
+                    <li><code>MaterialName</code> and <code>UnitCost</code> depend only on <code>MaterialId</code>. They move to <strong>Materials</strong>.</li>
+                    <li>Only <code>Quantity</code> depends on both. It stays in the junction table <strong>WorkOrderMaterials</strong>.</li>
+                </ul>
+                <p class="mb-0">Now a price change is one row in <code>Materials</code>, not every line that ever used that material.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-white"><span class="badge text-bg-success me-2">3NF</span><strong>No transitive dependencies</strong></div>
+            <div class="card-body small">
+                <p><strong>Rule:</strong> 2NF, and non-key columns depend on the key and <em>nothing but</em> the key.</p>
+                <p>
+                    After 2NF, <code>WorkOrders</code> would still carry <code>CustomerName</code>, <code>Phone</code>, and <code>City</code>.
+                    Those depend on the customer, not on the work order: <code>WorkOrderId → CustomerId → Phone</code>.
+                </p>
+                <p>
+                    Move them to <strong>Customers</strong> and keep only the foreign key <code>WorkOrders.CustomerId</code>.
+                    That also fixes the <em>insert anomaly</em>: Oak Ridge Church can exist before it has any jobs.
+                </p>
+                <p class="mb-0">
+                    It fixes the <em>delete anomaly</em> too. Deleting a customer's last job no longer deletes the customer's phone number.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ---------- After ---------- *@
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <span class="badge text-bg-success me-2">After</span><strong>The real JobDesk tables (3NF)</strong>
+    </div>
+    <div class="card-body small pb-2">
+        Each fact is stored once. Arrows are foreign keys: <code>WorkOrders.CustomerId → Customers.Id</code>,
+        <code>WorkOrderMaterials.WorkOrderId → WorkOrders.Id</code>, <code>WorkOrderMaterials.MaterialId → Materials.Id</code>.
+    </div>
+    <div class="row g-3 px-3 pb-3">
+        <div class="col-md-6">
+            <div class="fw-semibold small mb-1">Customers</div>
+            <table class="table table-sm table-bordered small mb-0">
+                <thead class="table-light"><tr><th>Id (PK)</th><th>Name</th><th>Phone</th><th>City</th></tr></thead>
+                <tbody>
+                    @foreach (var c in Model.Customers)
+                    {
+                        <tr><td>@c.Id</td><td>@c.Name</td><td>@c.Phone</td><td>@c.City</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <div class="fw-semibold small mb-1">Materials</div>
+            <table class="table table-sm table-bordered small mb-0">
+                <thead class="table-light"><tr><th>Id (PK)</th><th>Name</th><th>Unit</th><th class="text-end">UnitCost</th></tr></thead>
+                <tbody>
+                    @foreach (var m in Model.Materials)
+                    {
+                        <tr><td>@m.Id</td><td>@m.Name</td><td>@m.Unit</td><td class="text-end">@Money(m.UnitCost)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <div class="fw-semibold small mb-1">WorkOrders</div>
+            <table class="table table-sm table-bordered small mb-0">
+                <thead class="table-light"><tr><th>Id (PK)</th><th>CustomerId (FK)</th><th>Title</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var w in Model.WorkOrders)
+                    {
+                        <tr>
+                            <td>@w.Id</td>
+                            <td title="@(customersById.TryGetValue(w.CustomerId, out var cu) ? cu.Name : "")">@w.CustomerId</td>
+                            <td>@w.Title</td>
+                            <td>@w.Status</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <div class="fw-semibold small mb-1">WorkOrderMaterials <span class="text-muted fw-normal">(junction table)</span></div>
+            <table class="table table-sm table-bordered small mb-0">
+                <thead class="table-light"><tr><th>WorkOrderId (FK)</th><th>MaterialId (FK)</th><th class="text-end">Quantity</th></tr></thead>
+                <tbody>
+                    @foreach (var l in Model.Lines)
+                    {
+                        <tr>
+                            <td>@l.WorkOrderId</td>
+                            <td title="@(materialsById.TryGetValue(l.MaterialId, out var ma) ? ma.Name : "")">@l.MaterialId</td>
+                            <td class="text-end">@l.Quantity.ToString("0.##")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-white"><strong>Why the junction table and foreign keys matter</strong></div>
+    <div class="card-body small">
+        <ul class="mb-0">
+            <li>A work order uses many materials, and a material is used on many work orders. That's many-to-many, and it needs a junction table. <code>WorkOrderMaterials</code> also holds the one fact that belongs to the pair: <code>Quantity</code>.</li>
+            <li>Foreign keys stop orphans. You can't add a line for work order 999 if it doesn't exist. Deleting a customer who still has work orders is blocked (<code>OnDelete(Restrict)</code> in <code>JobDeskContext</code>).</li>
+            <li>The price of normalizing is joins. Reports join the tables back together, and that's exactly where the join-grain bug in <code>BUG.md</code> came from.</li>
+            <li>
+                <strong>Deliberate denormalization:</strong> real systems often copy <code>UnitCost</code> onto the line at the moment the job is quoted, so later price changes don't rewrite old invoices.
+                That's a conscious trade-off for history, not an accident. JobDesk keeps it simple and doesn't do this.
+            </li>
+        </ul>
+    </div>
+</div>

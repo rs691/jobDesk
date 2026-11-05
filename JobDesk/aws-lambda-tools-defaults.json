@@ -1,0 +1,19 @@
+{
+  "Information": [
+    "Settings for 'dotnet lambda deploy-function' (Amazon.Lambda.Tools). Read DEPLOY-AWS-LAMBDA.md first.",
+    "This deploys the READ-ONLY public demo. SQLite lives in /tmp and resets on every cold start."
+  ],
+  "profile": "",
+  "region": "us-east-1",
+  "configuration": "Release",
+  "framework": "net8.0",
+  "function-name": "jobdesk-demo",
+  "function-runtime": "dotnet8",
+  "function-architecture": "x86_64",
+  "function-handler": "JobDesk",
+  "function-memory-size": 1024,
+  "function-timeout": 30,
+  "environment-variables": "ASPNETCORE_ENVIRONMENT=PublicDemo",
+  "function-url-enable": true,
+  "msbuild-parameters": "--self-contained false"
+}

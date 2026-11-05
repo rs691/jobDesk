@@ -1,0 +1,126 @@
+@model ReportsPageViewModel
+@{
+    ViewData["Title"] = "Reports";
+    var open = Model.OpenJobs;
+    var jobs = Model.CustomerJobs;
+}
+
+<h1 class="h3 mb-1">Reports</h1>
+<p class="text-muted mb-4">
+    Each report is a stored procedure on SQL Server. Locally on SQLite the same SQL runs inline.
+    Both are parameterized and never string-concatenated.
+</p>
+
+@* ---------- Report 1: open jobs by customer ---------- *@
+<div class="card mb-4">
+    <div class="card-header bg-white d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div>
+            <div class="fw-semibold">Work orders &amp; material cost by customer</div>
+            <div class="text-muted small"><code>usp_OpenJobsByCustomer @@Status</code></div>
+        </div>
+        <form method="get" asp-action="Index" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="customerId" value="@jobs.CustomerId" />
+            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Status">
+                @foreach (var s in Enum.GetValues<WorkOrderStatus>())
+                {
+                    <option value="@s" selected="@(open.Status == s)">@s</option>
+                }
+            </select>
+            <div class="form-check form-switch text-nowrap mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="buggy" name="buggy" value="true"
+                       checked="@open.ShowBuggyVersion" onchange="this.form.submit()" />
+                <label class="form-check-label small" for="buggy">Original (buggy) query</label>
+            </div>
+        </form>
+    </div>
+
+    @if (open.ShowBuggyVersion)
+    {
+        <div class="alert alert-danger small rounded-0 border-start-0 border-end-0 mb-0">
+            <strong>Reproducing the bug from BUG.md.</strong>
+            INNER JOINs drop work orders with no material lines (and customers with no work orders),
+            and <code>COUNT(*)</code> counts material lines, not work orders.
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Customer</th><th class="text-end">@open.Status work orders</th><th class="text-end">Material cost</th></tr>
+            </thead>
+            <tbody>
+                @if (open.Rows.Count == 0)
+                {
+                    <tr><td colspan="3" class="text-muted text-center py-4">No rows returned.</td></tr>
+                }
+                @foreach (var r in open.Rows)
+                {
+                    <tr class="@(r.OpenWorkOrders == 0 ? "text-muted" : "")">
+                        <td><a asp-action="Index" asp-route-status="@open.Status" asp-route-customerId="@r.CustomerId">@r.CustomerName</a></td>
+                        <td class="text-end">@r.OpenWorkOrders</td>
+                        <td class="text-end">$@r.MaterialCost.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot class="table-light fw-semibold">
+                <tr><td>Total</td><td class="text-end">@open.TotalWorkOrders</td><td class="text-end">$@open.TotalMaterialCost.ToString("N2")</td></tr>
+            </tfoot>
+        </table>
+    </div>
+
+    @if (open.ShowBuggyVersion)
+    {
+        <div class="card-footer bg-white small">
+            <div class="text-danger mb-2">The buggy version always runs inline. It was never turned into a stored procedure.</div>
+            <pre class="bg-dark text-light p-3 rounded mb-0"><code>@open.Query.ExecutedSql</code></pre>
+        </div>
+    }
+    else
+    {
+        <partial name="_QueryInfo" model="open.Query" />
+    }
+</div>
+
+@* ---------- Report 2: jobs for one customer ---------- *@
+<div class="card mb-4" id="customer-jobs">
+    <div class="card-header bg-white d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div>
+            <div class="fw-semibold">Jobs by customer</div>
+            <div class="text-muted small"><code>usp_WorkOrdersByCustomer @@CustomerId</code></div>
+        </div>
+        <form method="get" asp-action="Index" asp-fragment="customer-jobs" class="d-flex gap-2">
+            <input type="hidden" name="status" value="@open.Status" />
+            <select name="customerId" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Customer">
+                @foreach (var c in Model.Customers)
+                {
+                    <option value="@c.Id" selected="@(c.Id == jobs.CustomerId)">@c.Name</option>
+                }
+            </select>
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>#</th><th>Title</th><th>Status</th><th>Scheduled</th><th class="text-end">Material lines</th><th class="text-end">Material cost</th></tr>
+            </thead>
+            <tbody>
+                @if (jobs.Rows.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted text-center py-4">This customer has no work orders.</td></tr>
+                }
+                @foreach (var r in jobs.Rows)
+                {
+                    <tr>
+                        <td class="text-muted">@r.WorkOrderId</td>
+                        <td><a asp-controller="WorkOrders" asp-action="Details" asp-route-id="@r.WorkOrderId">@r.Title</a></td>
+                        <td>@r.Status</td>
+                        <td>@(r.ScheduledDate?.ToString("MMM d, yyyy") ?? "—")</td>
+                        <td class="text-end">@r.MaterialLines</td>
+                        <td class="text-end">$@r.MaterialCost.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <partial name="_QueryInfo" model="jobs.Query" />
+</div>

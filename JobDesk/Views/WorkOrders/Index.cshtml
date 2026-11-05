@@ -1,0 +1,64 @@
+@model List<WorkOrder>
+@{
+    ViewData["Title"] = "Work orders";
+    var current = ViewBag.Status as WorkOrderStatus?;
+}
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Work orders</h1>
+    <div class="d-flex gap-2">
+        <form method="get" asp-action="Index" class="d-flex gap-2">
+            <select name="status" class="form-select" onchange="this.form.submit()" aria-label="Filter by status">
+                <option value="">All statuses</option>
+                @foreach (var s in Enum.GetValues<WorkOrderStatus>())
+                {
+                    <option value="@s" selected="@(current == s)">@s</option>
+                }
+            </select>
+            <noscript><button class="btn btn-outline-secondary">Filter</button></noscript>
+        </form>
+        @if (!DemoMode.ReadOnly) { <a class="btn btn-primary text-nowrap" asp-action="Create">New work order</a> }
+    </div>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-secondary">
+        No work orders @(current is null ? "yet" : $"with status {current}").
+        @if (current is not null) { <a asp-action="Index">Show all.</a> }
+    </div>
+}
+else
+{
+    <div class="table-responsive bg-white rounded border">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>#</th><th>Title</th><th>Customer</th><th>Status</th><th>Scheduled</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var w in Model)
+                {
+                    <tr>
+                        <td class="text-muted">@w.Id</td>
+                        <td><a asp-action="Details" asp-route-id="@w.Id">@w.Title</a></td>
+                        <td>@w.Customer?.Name</td>
+                        <td><span class="badge @StatusBadge(w.Status)">@w.Status</span></td>
+                        <td>@(w.ScheduledDate?.ToString("MMM d, yyyy") ?? "—")</td>
+                        <td class="text-end">@if (!DemoMode.ReadOnly) { <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@w.Id">Edit</a> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@functions {
+    static string StatusBadge(WorkOrderStatus s) => s switch
+    {
+        WorkOrderStatus.Open => "text-bg-primary",
+        WorkOrderStatus.Scheduled => "text-bg-info",
+        WorkOrderStatus.InProgress => "text-bg-warning",
+        WorkOrderStatus.Completed => "text-bg-success",
+        _ => "text-bg-secondary"
+    };
+}

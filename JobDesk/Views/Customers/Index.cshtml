@@ -1,0 +1,36 @@
+@model List<Customer>
+@{
+    ViewData["Title"] = "Customers";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Customers</h1>
+    @if (!DemoMode.ReadOnly) { <a class="btn btn-primary" asp-action="Create">New customer</a> }
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-secondary">No customers yet. <a asp-action="Create">Add the first one.</a></div>
+}
+else
+{
+    <div class="table-responsive bg-white rounded border">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Name</th><th>City</th><th>Phone</th><th>Email</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Model)
+                {
+                    <tr>
+                        <td>@c.Name</td>
+                        <td>@c.City</td>
+                        <td>@c.Phone</td>
+                        <td>@c.Email</td>
+                        <td class="text-end">@if (!DemoMode.ReadOnly) { <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@c.Id">Edit</a> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
