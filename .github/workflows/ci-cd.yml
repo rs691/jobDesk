@@ -1,0 +1,186 @@
+name: CI/CD
+
+# CI  (job "build-test"): every pull request to main, every push to main, and manual runs.
+#     Restores, builds Release, publishes the Lambda package, and smoke-tests it in both
+#     read-only PublicDemo mode and local practice mode.
+# CD  (job "deploy"): only on main, only after build-test passes. Uploads that exact tested
+#     zip to the existing Lambda function with short-lived GitHub OIDC credentials.
+#     It changes function code only, never configuration (env vars, memory, URL, IAM).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  PACKAGE_NAME: JobDesk-lambda-publish.zip
+
+jobs:
+  build-test:
+    name: Build and smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore JobDesk.sln
+
+      - name: Build (Release)
+        run: dotnet build JobDesk.sln -c Release --no-restore
+
+      - name: Publish Lambda package (linux-x64, framework-dependent)
+        run: |
+          dotnet publish JobDesk/JobDesk.csproj -c Release -r linux-x64 --self-contained false -o publish/lambda
+          (cd publish/lambda && zip -qr "../$PACKAGE_NAME" .)
+          ls -l "publish/$PACKAGE_NAME"
+
+      - name: Verify package is the read-only Lambda demo build
+        run: |
+          set -euo pipefail
+          zip="publish/$PACKAGE_NAME"
+          for f in JobDesk.dll JobDesk.runtimeconfig.json JobDesk.deps.json appsettings.json appsettings.PublicDemo.json \
+                   Amazon.Lambda.AspNetCoreServer.dll Amazon.Lambda.AspNetCoreServer.Hosting.dll; do
+            unzip -l "$zip" "$f" > /dev/null || { echo "::error::$f is missing from the zip root"; exit 1; }
+          done
+          demo=publish/lambda/appsettings.PublicDemo.json
+          test "$(jq -r '.Demo.ReadOnly' "$demo")" = "true"            || { echo "::error::PublicDemo must keep Demo.ReadOnly=true"; exit 1; }
+          test "$(jq -r '.Database.Provider' "$demo")" = "Sqlite"      || { echo "::error::PublicDemo must use SQLite"; exit 1; }
+          jq -r '.ConnectionStrings.JobDesk' "$demo" | grep -q '^Data Source=/tmp/' || { echo "::error::PublicDemo SQLite file must live in /tmp"; exit 1; }
+          test "$(jq -r '.Storage.Provider' "$demo")" = "Local"        || { echo "::error::PublicDemo must not use S3"; exit 1; }
+          echo "Package OK: $(du -h "$zip" | cut -f1)"
+
+      - name: Smoke test - read-only PublicDemo mode
+        working-directory: publish/lambda
+        run: |
+          ASPNETCORE_ENVIRONMENT=PublicDemo ASPNETCORE_URLS=http://127.0.0.1:5115 \
+            dotnet JobDesk.dll > "$RUNNER_TEMP/demo.log" 2>&1 &
+          app=$!
+          for _ in $(seq 60); do curl -sf -o /dev/null http://127.0.0.1:5115/ && break; sleep 1; done
+          status=0
+          "$GITHUB_WORKSPACE/scripts/demo-smoke-test.sh" http://127.0.0.1:5115 || status=$?
+          kill "$app" || true
+          if [ "$status" -ne 0 ]; then cat "$RUNNER_TEMP/demo.log"; fi
+          exit "$status"
+
+      - name: Smoke test - local practice mode (writes allowed)
+        working-directory: publish/lambda
+        run: |
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5116 \
+          ConnectionStrings__JobDesk="Data Source=$RUNNER_TEMP/practice.db" \
+          Storage__LocalPath="$RUNNER_TEMP/practice-uploads" \
+            dotnet JobDesk.dll > "$RUNNER_TEMP/practice.log" 2>&1 &
+          app=$!
+          for _ in $(seq 60); do curl -sf -o /dev/null http://127.0.0.1:5116/ && break; sleep 1; done
+          status=0
+          "$GITHUB_WORKSPACE/scripts/practice-smoke-test.sh" http://127.0.0.1:5116 || status=$?
+          kill "$app" || true
+          if [ "$status" -ne 0 ]; then cat "$RUNNER_TEMP/practice.log"; fi
+          exit "$status"
+
+      - name: Upload tested package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lambda-package
+          path: publish/${{ env.PACKAGE_NAME }}
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy to AWS Lambda
+    needs: build-test
+    # The IAM role only trusts repo:rs691/jobDesk:ref:refs/heads/main, so this must stay main-only.
+    # No GitHub "environment" here: it would change the OIDC subject and break that trust.
+    if: >-
+      github.repository == 'rs691/jobDesk' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read   # checkout for the smoke-test script
+      id-token: write  # request the GitHub OIDC token that AWS exchanges for short-lived role credentials
+    concurrency:
+      group: jobdesk-lambda-deploy
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_LAMBDA_FUNCTION_NAME: ${{ vars.AWS_LAMBDA_FUNCTION_NAME }}
+      JOBDESK_DEMO_URL: ${{ vars.JOBDESK_DEMO_URL }}
+    steps:
+      - name: Check repository variables
+        run: |
+          missing=0
+          for v in AWS_REGION AWS_ROLE_ARN AWS_LAMBDA_FUNCTION_NAME; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Repository variable $v is not set (Settings > Secrets and variables > Actions > Variables)."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download tested package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lambda-package
+          path: publish
+
+      - name: Get short-lived AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+          role-session-name: jobdesk-deploy-${{ github.run_id }}
+
+      - name: Check the function is still the read-only .NET 8 demo
+        run: |
+          set -euo pipefail
+          cfg=$(aws lambda get-function-configuration --function-name "$AWS_LAMBDA_FUNCTION_NAME" --output json)
+          runtime=$(jq -r '.Runtime' <<<"$cfg")
+          handler=$(jq -r '.Handler' <<<"$cfg")
+          envname=$(jq -r '.Environment.Variables.ASPNETCORE_ENVIRONMENT // ""' <<<"$cfg")
+          echo "Runtime=$runtime Handler=$handler ASPNETCORE_ENVIRONMENT=$envname"
+          [ "$runtime" = "dotnet8" ]    || { echo "::error::Expected runtime dotnet8, got $runtime"; exit 1; }
+          [ "$handler" = "JobDesk" ]    || { echo "::error::Expected handler JobDesk, got $handler"; exit 1; }
+          [ "$envname" = "PublicDemo" ] || { echo "::error::Expected ASPNETCORE_ENVIRONMENT=PublicDemo, got '$envname'. Refusing to deploy a non-read-only config."; exit 1; }
+
+      - name: Update function code
+        run: |
+          aws lambda update-function-code \
+            --function-name "$AWS_LAMBDA_FUNCTION_NAME" \
+            --zip-file "fileb://publish/$PACKAGE_NAME" \
+            --query '{Version:Version,CodeSize:CodeSize,CodeSha256:CodeSha256,LastUpdateStatus:LastUpdateStatus}' \
+            --output table
+          aws lambda wait function-updated --function-name "$AWS_LAMBDA_FUNCTION_NAME"
+          aws lambda get-function-configuration --function-name "$AWS_LAMBDA_FUNCTION_NAME" \
+            --query '{State:State,LastUpdateStatus:LastUpdateStatus,LastModified:LastModified}' --output table
+
+      - name: Smoke test the live demo
+        if: env.JOBDESK_DEMO_URL != ''
+        run: |
+          url="${JOBDESK_DEMO_URL%/}"
+          for _ in $(seq 20); do curl -sf -o /dev/null "$url/" && break; sleep 3; done
+          scripts/demo-smoke-test.sh "$url"
