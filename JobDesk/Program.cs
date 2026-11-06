@@ -58,6 +58,22 @@ else
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 
+var askOpts = config.GetSection(AskOptions.Section).Get<AskOptions>() ?? new AskOptions();
+// Env overrides: Ask__UseBedrock, Ask__ModelId, Ask__Region (or BEDROCK_MODEL_ID)
+if (bool.TryParse(Environment.GetEnvironmentVariable("Ask__UseBedrock"), out var useBr))
+    askOpts.UseBedrock = useBr;
+else if (bool.TryParse(Environment.GetEnvironmentVariable("USE_BEDROCK"), out var useBr2))
+    askOpts.UseBedrock = useBr2;
+var modelEnv = Environment.GetEnvironmentVariable("Ask__ModelId")
+    ?? Environment.GetEnvironmentVariable("BEDROCK_MODEL_ID");
+if (!string.IsNullOrWhiteSpace(modelEnv)) askOpts.ModelId = modelEnv!;
+var regionEnv = Environment.GetEnvironmentVariable("Ask__Region")
+    ?? Environment.GetEnvironmentVariable("AWS_REGION")
+    ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION");
+if (!string.IsNullOrWhiteSpace(regionEnv)) askOpts.Region = regionEnv!;
+builder.Services.AddSingleton(askOpts);
+builder.Services.AddScoped<IAskService, AskService>();
+
 // Behind a proxy (Lambda Function URL, a load balancer, a container host) the original
 // scheme and client IP arrive in X-Forwarded-* headers. Only trusted when enabled in config.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -70,7 +86,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 var app = builder.Build();
 
 app.Logger.LogInformation(demo.ReadOnly
-    ? "PUBLIC DEMO MODE: read-only. All POST/PUT/PATCH/DELETE requests are refused."
+    ? "Public site: writes blocked (Changes unavailable). Ask allowed."
     : "Local practice mode: create, edit, upload, and delete are enabled.");
 
 // Creates the database on first run and fills it with practice data.

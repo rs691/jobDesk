@@ -1,0 +1,36 @@
+@{
+    ViewData["Title"] = "Ask";
+    var q = (string)(ViewBag.Question ?? "");
+    var answer = (string?)ViewBag.Answer;
+    var source = (string?)ViewBag.Source;
+    var modelId = (string?)ViewBag.ModelId;
+}
+
+<h1 class="h3 mb-1">Ask JobDesk</h1>
+<p class="text-muted mb-3">Quick questions about the job list. Not fancy.</p>
+
+<form method="get" asp-action="Index" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" value="@q" class="form-control" maxlength="500"
+               placeholder="e.g. open jobs by customer" aria-label="Question" autofocus />
+        <button class="btn btn-dark" type="submit">Ask</button>
+    </div>
+</form>
+
+<div class="small text-muted mb-3">
+    Try: <a href="?q=open%20jobs%20by%20customer">open jobs by customer</a> ·
+    <a href="?q=what%27s%20next%20on%20the%20schedule">what’s next on the schedule</a> ·
+    <a href="?q=draft%20a%20short%20crew%20note%20for%20open%20work">draft a short crew note</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(answer))
+{
+    <div class="card">
+        <div class="card-body">
+            <pre class="mb-0" style="white-space:pre-wrap;font-family:system-ui,sans-serif">@answer</pre>
+        </div>
+        <div class="card-footer small text-muted">
+            source: @source@(string.IsNullOrEmpty(modelId) ? "" : $" · {modelId}")
+        </div>
+    </div>
+}

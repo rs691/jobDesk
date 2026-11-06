@@ -22,19 +22,13 @@
                         <li class="nav-item"><a class="nav-link" asp-controller="WorkOrders" asp-action="Index">Work orders</a></li>
                         <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports</a></li>
                         <li class="nav-item"><a class="nav-link" asp-controller="Learn" asp-action="Normalization">Normalization</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Ask" asp-action="Index">Ask</a></li>
                     </ul>
                 </div>
             </div>
         </nav>
     </header>
     <div class="container">
-        @if (DemoMode.ReadOnly)
-        {
-            <div class="alert alert-warning small" role="status">
-                <strong>Read-only public demo.</strong> All data is made-up sample data and resets whenever the server restarts.
-                Creating, editing, uploading, and deleting are turned off here. They work in the local practice version.
-            </div>
-        }
         <main role="main" class="pb-4">
             @if (TempData["Message"] is string message)
             {
@@ -55,7 +49,7 @@
     </div>
 
     <footer class="border-top footer text-muted small">
-        <div class="container">JobDesk — interview practice app (ASP.NET Core MVC, EF Core, SQLite)</div>
+        <div class="container">JobDesk</div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

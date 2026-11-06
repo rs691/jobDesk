@@ -11,8 +11,8 @@ Everything lives in one workflow file: [`.github/workflows/ci-cd.yml`](.github/w
 
 1. `dotnet restore` and `dotnet build -c Release` for .NET 8.
 2. `dotnet publish -c Release -r linux-x64 --self-contained false`, then zips the output with the files at the zip root. This is the Lambda package (about 7.7 MB). The app runs on Lambda through `Amazon.Lambda.AspNetCoreServer.Hosting` (`AddAWSLambdaHosting(LambdaEventSource.HttpApi)`, payload format 2.0), with handler `JobDesk`.
-3. Checks the zip: `JobDesk.dll`, the runtime config, and the Lambda hosting DLLs are at the root, and `appsettings.PublicDemo.json` still says read-only, SQLite, a `/tmp` database file, and local (not S3) storage.
-4. Starts the published app in **PublicDemo** mode and runs `scripts/demo-smoke-test.sh`: the GET pages return 200, the banner shows, and every POST/PUT/PATCH/DELETE gets a server-side 403 with data unchanged.
+3. Checks the zip: `JobDesk.dll`, the runtime config, and the Lambda hosting DLLs are at the root, and `appsettings.PublicDemo.json` still says read-only, SQLite, a `/tmp` database file, local (not S3) storage, and **empty** `Demo:PreparedFor`.
+4. Starts the published app in **PublicDemo** mode and runs `scripts/demo-smoke-test.sh`: the GET pages return 200 (including `/Ask`), and every mutating POST/PUT/PATCH/DELETE gets a server-side 403 with data unchanged.
 5. Starts it again in **local practice** mode and runs `scripts/practice-smoke-test.sh`: pages load and a real form POST adds a customer, so local full practice keeps working.
 6. Saves the zip as a run artifact (kept 7 days).
 

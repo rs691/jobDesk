@@ -9,7 +9,7 @@ BASE="${BASE%/}"
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then echo "PASS  $1"; pass=$((pass+1)); else echo "FAIL  $1 (expected $3, got $2)"; fail=$((fail+1)); fi; }
 
-for p in / /Customers /WorkOrders /Reports /Learn/Normalization; do
+for p in / /Ask /Customers /WorkOrders /Reports /Learn/Normalization; do
   check "GET $p" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p")" 200
 done
 check "No read-only banner" "$(curl -s "$BASE/" | grep -c 'Read-only public demo')" 0

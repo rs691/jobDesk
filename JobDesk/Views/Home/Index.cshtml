@@ -3,16 +3,16 @@
 }
 
 <h1 class="h3 mb-1">JobDesk</h1>
-<p class="text-muted mb-4">Customers, work orders, and a SQL-backed report on open jobs and material cost.</p>
+<p class="text-muted mb-4">Work orders and customers. Quick reports.</p>
 
 @if (!string.IsNullOrWhiteSpace(DemoMode.PreparedFor))
 {
     <div class="card border-primary-subtle mb-4">
         <div class="card-body small">
             <div class="fw-semibold mb-1">Prepared for @DemoMode.PreparedFor</div>
-            A practice project by Robert Stewart for the Junior Software Developer interview. It covers C# and ASP.NET Core MVC,
-            SQL reporting and stored procedures, normalization, and AWS. The fence-job data is invented sample data.
-            This is not connected to, or based on, any @DemoMode.PreparedFor system.
+            <p class="mb-0 text-muted">
+                This sample app uses invented field-service data. It is not connected to any employer’s systems.
+            </p>
         </div>
     </div>
 }
@@ -37,49 +37,16 @@
     <div class="col-sm-4">
         <a class="card text-decoration-none h-100" asp-controller="Reports" asp-action="Index">
             <div class="card-body">
-                <div class="text-muted small">Report</div>
-                <div class="fs-5 mt-2">Open jobs &amp; material cost &rarr;</div>
+                <div class="text-muted small">Reports</div>
+                <div class="fs-5 mt-2">Open jobs / material cost &rarr;</div>
             </div>
         </a>
     </div>
 </div>
 
-<h2 class="h6 text-uppercase text-muted mb-2">Interview topics</h2>
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <a class="card text-decoration-none h-100" asp-controller="Reports" asp-action="Index">
-            <div class="card-body">
-                <div class="fw-semibold">Stored procedures</div>
-                <div class="small text-muted">Two reports backed by <code>usp_OpenJobsByCustomer</code> and <code>usp_WorkOrdersByCustomer</code>, with the T-SQL shown on the page.</div>
-            </div>
-        </a>
-    </div>
-    <div class="col-md-4">
-        <a class="card text-decoration-none h-100" asp-controller="Learn" asp-action="Normalization">
-            <div class="card-body">
-                <div class="fw-semibold">Normalization</div>
-                <div class="small text-muted">Spreadsheet → 1NF → 2NF → 3NF, built from the live job data.</div>
-            </div>
-        </a>
-    </div>
-    <div class="col-md-4">
-        <a class="card text-decoration-none h-100" asp-controller="WorkOrders" asp-action="Details" asp-route-id="1">
-            <div class="card-body">
-                <div class="fw-semibold">AWS S3 attachments</div>
-                <div class="small text-muted">Upload site photos on a work order. Stored in a local folder by default, or in S3 with a config change.</div>
-            </div>
-        </a>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-body">
-        <h2 class="h6">How a request flows</h2>
-        <ol class="mb-0 small">
-            <li><strong>Razor view</strong> (<code>Views/WorkOrders/Index.cshtml</code>) posts or links to a controller action.</li>
-            <li><strong>Controller</strong> (<code>WorkOrdersController</code>) validates input and calls <code>IJobService</code>.</li>
-            <li><strong>Service</strong> (<code>JobService</code>) uses EF Core LINQ for CRUD, or parameterized raw SQL for the report.</li>
-            <li><strong>SQLite</strong> (<code>jobdesk.db</code>) is created and seeded on first run.</li>
-        </ol>
-    </div>
-</div>
+<ul class="list-unstyled mb-0">
+    <li class="mb-2"><a asp-controller="Ask" asp-action="Index">Ask</a> <span class="text-muted small">— short Q&amp;A from the job list (optional Amazon Bedrock in the hosted demo)</span></li>
+    <li class="mb-2"><a asp-controller="Reports" asp-action="Index">Reports</a> <span class="text-muted small">— open jobs by customer</span></li>
+    <li class="mb-2"><a asp-controller="Learn" asp-action="Normalization">Normalization notes</a> <span class="text-muted small">— 1NF/2NF/3NF from this data</span></li>
+    <li class="mb-2"><a asp-controller="WorkOrders" asp-action="Details" asp-route-id="1">Work order #1</a> <span class="text-muted small">— materials + file uploads</span></li>
+</ul>
