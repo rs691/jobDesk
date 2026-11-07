@@ -1,5 +1,7 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace JobDesk.Services.Databricks;
 
@@ -7,12 +9,18 @@ public class DatabricksStatementClient : IDatabricksStatementClient
 {
     private readonly HttpClient _http;
     private readonly DatabricksOptions _opts;
+    private readonly IConfiguration _config;
     private readonly ILogger<DatabricksStatementClient> _log;
 
-    public DatabricksStatementClient(HttpClient http, DatabricksOptions opts, ILogger<DatabricksStatementClient> log)
+    public DatabricksStatementClient(
+        HttpClient http,
+        DatabricksOptions opts,
+        IConfiguration config,
+        ILogger<DatabricksStatementClient> log)
     {
         _http = http;
         _opts = opts;
+        _config = config;
         _log = log;
     }
 
@@ -23,6 +31,7 @@ public class DatabricksStatementClient : IDatabricksStatementClient
         if (_opts.AuthMode != DatabricksAuthMode.PatBearer)
             throw new InvalidOperationException("Databricks auth mode is not supported for unattended API calls.");
         var token = DatabricksPatLoader.Normalize(_opts.AccessToken)
+            ?? DatabricksPatLoader.ResolveFromEnvironmentAndConfiguration(_config)
             ?? throw new InvalidOperationException("Databricks PAT (Bearer token) is not configured.");
 
         var waitTimeout = Math.Clamp(_opts.StatementTimeoutSeconds, 5, 50);
@@ -39,16 +48,39 @@ public class DatabricksStatementClient : IDatabricksStatementClient
             Content = new StringContent(JsonSerializer.Serialize(body, StatementJson.Options), Encoding.UTF8, "application/json")
         };
         DatabricksRequestAuth.ApplyBearer(create, token);
+        var (_, bearerPrefix, authLineLength) = DatabricksOutboundAuthDiagnosticHandler.DescribeAuthorization(create);
+        _log.LogInformation(
+            "Databricks statement create patLength={PatLength} bearerPrefixOnRequest={BearerPrefix} authorizationHeaderLineLength={AuthLineLength}",
+            token.Length,
+            bearerPrefix,
+            authLineLength);
 
         using var createResp = await _http.SendAsync(create, ct);
         var createJson = await createResp.Content.ReadAsStringAsync(ct);
         if (!createResp.IsSuccessStatusCode)
         {
-            _log.LogWarning(
-                "Databricks statement create failed with {Status} for host {Host} warehouse {WarehouseId}",
-                createResp.StatusCode,
-                DatabricksApiUrls.NormalizeHost(_opts.Host),
-                _opts.WarehouseId);
+            if (createResp.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                var www = createResp.Headers.WwwAuthenticate.Count > 0
+                    ? string.Join("; ", createResp.Headers.WwwAuthenticate.Select(h => h.ToString()))
+                    : "(none)";
+                _log.LogWarning(
+                    "Databricks statement create 401 host={Host} warehouse={WarehouseId} patLength={PatLength} authLineLength={AuthLineLength} wwwAuthenticate={WwwAuthenticate}",
+                    DatabricksApiUrls.NormalizeHost(_opts.Host),
+                    _opts.WarehouseId.Trim(),
+                    token.Length,
+                    authLineLength,
+                    www);
+            }
+            else
+            {
+                _log.LogWarning(
+                    "Databricks statement create failed with {Status} for host {Host} warehouse {WarehouseId}",
+                    createResp.StatusCode,
+                    DatabricksApiUrls.NormalizeHost(_opts.Host),
+                    _opts.WarehouseId);
+            }
+
             throw new InvalidOperationException($"Databricks statement failed ({(int)createResp.StatusCode}).");
         }
 

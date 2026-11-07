@@ -72,20 +72,22 @@ Non-secrets in `JobDesk/appsettings.PublicDemo.json`: `Databricks:Enabled=true`,
 
 ## Troubleshooting 401 Unauthorized (live)
 
-Typical causes in this app (not the warehouse SQL):
+**Ruled out for workspace `dbc-dab8e394-216d…`:** trailing-slash redirects — direct `POST /api/2.0/sql/statements` and `…/statements/` return 200 with redirects disabled; CloudWatch shows the same absolute URL with 401 (no `Location` hop).
 
-1. **`Databricks__AccessToken` set to an empty string** on Lambda — .NET treats `""` as present and skipped `DATABRICKS_TOKEN` on older builds. Fix: delete the empty variable or deploy the PAT-resolution fix.
-2. **PAT pasted with `Bearer ` prefix or trailing newline** — use raw token only (fix normalizes).
-3. **Wrong workspace host** — must match the PAT workspace (`dbc-dab8e394-216d.cloud.databricks.com`). Cold-start log includes `host`, `warehouse`, `catalog`, and **`tokenLength` only** (not the secret).
-4. **Workaround without a new PAT:** set the same value on **`Databricks__AccessToken`** (ASP.NET canonical name). You may remove `DATABRICKS_TOKEN` temporarily to force a single source. Both names are supported after the fix branch.
+Typical causes after URL/path checks:
 
-Older builds used `AuthenticationHeaderValue` and relative `HttpClient` URLs; the fix uses absolute workspace API URLs and `TryAddWithoutValidation("Authorization", "Bearer …")`.
+1. **Authorization not on the wire** — older builds set `AuthenticationHeaderValue`; fix uses `TryAddWithoutValidation("Authorization", "Bearer …")` and logs **`outboundAuthorizationPresent`**, **`authorizationValueLength`**, **`patLength`** (never the secret).
+2. **`Databricks__AccessToken` empty string** — legacy `??` in `Program.cs` kept `""` and ignored `DATABRICKS_TOKEN`. Fix: `DatabricksPatLoader` treats whitespace-only as missing; prefer `DATABRICKS_TOKEN` first.
+3. **PAT pasted with `Bearer ` prefix** — normalized at runtime.
+4. **Workspace network / IP access** — same PAT can work from a laptop but fail from **AWS Lambda egress IPs** if the workspace restricts networks (often still HTTP 401). Compare a one-off Lambda curl vs local; check Databricks admin **IP access lists / firewall** settings.
+5. **Wrong host vs PAT workspace** — cold-start log: `tokenLength`, `host`, `warehouse`, `catalog`.
 
-Parent checks (no secrets):
+Parent checks (no secrets) after deploying the fix branch:
 
-- Lambda env: confirm **`Databricks__AccessToken` is absent or non-empty**; if both exist, values should be identical after trim.
-- Cold-start log: `Ask Databricks: enabled (allowlisted read-only SQL).`
-- On 401 after deploy: compare `DATABRICKS_TOKEN` length in console (character count only) to PAT generated in Developer settings.
+- Cold start: `Ask Databricks: enabled host=… tokenLength=…`
+- On Ask 401: `Databricks HTTP POST … outboundAuthorizationPresent=… bearerPrefix=… authorizationValueLength=…` then `Databricks statement create 401 … wwwAuthenticate=…`
+- If `outboundAuthorizationPresent=false` → app transport bug (header not attached).
+- If `true` and lengths match console PAT count but still 401 → token bytes on Lambda differ from laptop, stale deploy artifact, or **network policy** on Databricks side.
 
 ## Limits
 

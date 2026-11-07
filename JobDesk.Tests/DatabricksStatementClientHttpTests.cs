@@ -1,6 +1,6 @@
 using System.Net;
-using System.Net.Http.Headers;
 using JobDesk.Services.Databricks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -23,7 +23,8 @@ public class DatabricksStatementClientHttpTests
             MaxPollAttempts = 1,
             PollIntervalMs = 1
         };
-        var client = new DatabricksStatementClient(http, opts, NullLogger<DatabricksStatementClient>.Instance);
+        var config = new ConfigurationBuilder().Build();
+        var client = new DatabricksStatementClient(http, opts, config, NullLogger<DatabricksStatementClient>.Instance);
         var sql = AskAllowlistedSql.Build(AskIntent.WorkOrdersByStatus, new DatabricksOptions
         {
             Catalog = "workspace",

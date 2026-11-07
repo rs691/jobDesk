@@ -97,6 +97,7 @@ if (!string.IsNullOrWhiteSpace(dbxAuth)
     dbxOpts.AuthMode = parsedAuth;
 builder.Services.AddSingleton(dbxOpts);
 
+builder.Services.AddTransient<DatabricksOutboundAuthDiagnosticHandler>();
 builder.Services.AddHttpClient<IDatabricksStatementClient, DatabricksStatementClient>((sp, client) =>
 {
     var o = sp.GetRequiredService<DatabricksOptions>();
@@ -110,7 +111,9 @@ builder.Services.AddHttpClient<IDatabricksStatementClient, DatabricksStatementCl
         client.BaseAddress = new Uri($"https://{host}/api/2.0/");
     }
     client.Timeout = TimeSpan.FromSeconds(Math.Clamp(o.StatementTimeoutSeconds + 10, 15, 55));
-});
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+.AddHttpMessageHandler<DatabricksOutboundAuthDiagnosticHandler>();
 
 builder.Services.AddScoped<IAskService, AskService>();
 
