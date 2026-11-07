@@ -47,7 +47,7 @@ public class DatabricksOptions
         && !string.IsNullOrWhiteSpace(Host)
         && !string.IsNullOrWhiteSpace(WarehouseId)
         && !string.IsNullOrWhiteSpace(Catalog)
-        && !string.IsNullOrWhiteSpace(AccessToken);
+        && DatabricksPatLoader.Normalize(AccessToken) is not null;
 
     public static void ValidateIdentifier(string value, string paramName)
     {

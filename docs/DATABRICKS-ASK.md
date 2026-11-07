@@ -70,6 +70,23 @@ Free Edition **unattended SQL API access is not confirmed** for this workspace. 
 
 Non-secrets in `JobDesk/appsettings.PublicDemo.json`: `Databricks:Enabled=true`, host, warehouse, schema, as-of; **`Catalog` intentionally empty** until env is set.
 
+## Troubleshooting 401 Unauthorized (live)
+
+Typical causes in this app (not the warehouse SQL):
+
+1. **`Databricks__AccessToken` set to an empty string** on Lambda — .NET treats `""` as present and skipped `DATABRICKS_TOKEN` on older builds. Fix: delete the empty variable or deploy the PAT-resolution fix.
+2. **PAT pasted with `Bearer ` prefix or trailing newline** — use raw token only (fix normalizes).
+3. **Wrong workspace host** — must match the PAT workspace (`dbc-dab8e394-216d.cloud.databricks.com`). Cold-start log includes `host`, `warehouse`, `catalog`, and **`tokenLength` only** (not the secret).
+4. **Workaround without a new PAT:** set the same value on **`Databricks__AccessToken`** (ASP.NET canonical name). You may remove `DATABRICKS_TOKEN` temporarily to force a single source. Both names are supported after the fix branch.
+
+Older builds used `AuthenticationHeaderValue` and relative `HttpClient` URLs; the fix uses absolute workspace API URLs and `TryAddWithoutValidation("Authorization", "Bearer …")`.
+
+Parent checks (no secrets):
+
+- Lambda env: confirm **`Databricks__AccessToken` is absent or non-empty**; if both exist, values should be identical after trim.
+- Cold-start log: `Ask Databricks: enabled (allowlisted read-only SQL).`
+- On 401 after deploy: compare `DATABRICKS_TOKEN` length in console (character count only) to PAT generated in Developer settings.
+
 ## Limits
 
 - `StatementTimeoutSeconds` (default 20) and poll caps fit Lambda **30s** timeout.

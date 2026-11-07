@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -23,31 +22,33 @@ public class DatabricksStatementClient : IDatabricksStatementClient
 
         if (_opts.AuthMode != DatabricksAuthMode.PatBearer)
             throw new InvalidOperationException("Databricks auth mode is not supported for unattended API calls.");
-        if (string.IsNullOrWhiteSpace(_opts.AccessToken))
-            throw new InvalidOperationException("Databricks PAT (Bearer token) is not configured.");
+        var token = DatabricksPatLoader.Normalize(_opts.AccessToken)
+            ?? throw new InvalidOperationException("Databricks PAT (Bearer token) is not configured.");
 
         var waitTimeout = Math.Clamp(_opts.StatementTimeoutSeconds, 5, 50);
-        var body = new
+        var body = new StatementExecutionRequest
         {
-            warehouse_id = _opts.WarehouseId,
-            statement = sql,
-            wait_timeout = $"{waitTimeout}s",
-            on_wait_timeout = "CONTINUE",
-            disposition = "INLINE",
-            format = "JSON_ARRAY"
+            WarehouseId = _opts.WarehouseId.Trim(),
+            Statement = sql,
+            WaitTimeout = $"{waitTimeout}s"
         };
 
-        using var create = new HttpRequestMessage(HttpMethod.Post, "sql/statements/")
+        var createUri = DatabricksApiUrls.StatementExecution(_opts.Host, "sql/statements/");
+        using var create = new HttpRequestMessage(HttpMethod.Post, createUri)
         {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(body, StatementJson.Options), Encoding.UTF8, "application/json")
         };
-        create.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _opts.AccessToken);
+        DatabricksRequestAuth.ApplyBearer(create, token);
 
         using var createResp = await _http.SendAsync(create, ct);
         var createJson = await createResp.Content.ReadAsStringAsync(ct);
         if (!createResp.IsSuccessStatusCode)
         {
-            _log.LogWarning("Databricks statement create failed with {Status}", createResp.StatusCode);
+            _log.LogWarning(
+                "Databricks statement create failed with {Status} for host {Host} warehouse {WarehouseId}",
+                createResp.StatusCode,
+                DatabricksApiUrls.NormalizeHost(_opts.Host),
+                _opts.WarehouseId);
             throw new InvalidOperationException($"Databricks statement failed ({(int)createResp.StatusCode}).");
         }
 
@@ -67,8 +68,9 @@ public class DatabricksStatementClient : IDatabricksStatementClient
         while (state is "PENDING" or "RUNNING" && attempts < _opts.MaxPollAttempts)
         {
             await Task.Delay(_opts.PollIntervalMs, ct);
-            using var poll = new HttpRequestMessage(HttpMethod.Get, $"sql/statements/{statementId}");
-            poll.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _opts.AccessToken);
+            var pollUri = DatabricksApiUrls.StatementExecution(_opts.Host, $"sql/statements/{statementId}");
+            using var poll = new HttpRequestMessage(HttpMethod.Get, pollUri);
+            DatabricksRequestAuth.ApplyBearer(poll, token);
             using var pollResp = await _http.SendAsync(poll, ct);
             var pollJson = await pollResp.Content.ReadAsStringAsync(ct);
             if (!pollResp.IsSuccessStatusCode)

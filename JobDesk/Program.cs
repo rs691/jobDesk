@@ -75,9 +75,8 @@ if (!string.IsNullOrWhiteSpace(regionEnv)) askOpts.Region = regionEnv!;
 builder.Services.AddSingleton(askOpts);
 
 var dbxOpts = config.GetSection(DatabricksOptions.Section).Get<DatabricksOptions>() ?? new DatabricksOptions();
-dbxOpts.AccessToken =
-    Environment.GetEnvironmentVariable("Databricks__AccessToken")
-    ?? Environment.GetEnvironmentVariable("DATABRICKS_TOKEN");
+// Tokens only from env / configuration keys — never from checked-in JSON.
+dbxOpts.AccessToken = DatabricksPatLoader.ResolveFromEnvironmentAndConfiguration(config);
 if (bool.TryParse(Environment.GetEnvironmentVariable("Databricks__Enabled"), out var dbxOn))
     dbxOpts.Enabled = dbxOn;
 if (bool.TryParse(Environment.GetEnvironmentVariable("Ask__UseDatabricks"), out var askDbxOn))
@@ -131,9 +130,21 @@ app.Logger.LogInformation(demo.ReadOnly
     : "Local practice mode: create, edit, upload, and delete are enabled.");
 if (dbxOpts.Enabled)
 {
-    app.Logger.LogInformation(dbxOpts.IsConfigured
-        ? "Ask Databricks: enabled (allowlisted read-only SQL)."
-        : "Ask Databricks: enabled but missing Host/WarehouseId/Catalog/token — local SQLite fallback only.");
+    var pat = DatabricksPatLoader.Normalize(dbxOpts.AccessToken);
+    if (dbxOpts.IsConfigured)
+    {
+        app.Logger.LogInformation(
+            "Ask Databricks: enabled host={Host} warehouse={WarehouseId} catalog={Catalog} tokenLength={TokenLength}",
+            DatabricksApiUrls.NormalizeHost(dbxOpts.Host),
+            dbxOpts.WarehouseId.Trim(),
+            dbxOpts.Catalog.Trim(),
+            pat!.Length);
+    }
+    else
+        app.Logger.LogInformation(
+            "Ask Databricks: enabled but not configured (host/warehouse/catalog/token). Host={Host} tokenLength={TokenLength}",
+            string.IsNullOrWhiteSpace(dbxOpts.Host) ? "(missing)" : DatabricksApiUrls.TryNormalizeHost(dbxOpts.Host),
+            pat?.Length ?? 0);
 }
 
 // Creates the database on first run and fills it with practice data.
