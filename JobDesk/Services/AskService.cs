@@ -1,7 +1,7 @@
 using System.Text;
-using System.Text.Json;
 using JobDesk.Data;
 using JobDesk.Models;
+using JobDesk.Services.Databricks;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobDesk.Services;
@@ -18,12 +18,21 @@ public class AskService : IAskService
 {
     private readonly JobDeskContext _db;
     private readonly AskOptions _opts;
+    private readonly DatabricksOptions _dbx;
+    private readonly IDatabricksStatementClient _databricks;
     private readonly ILogger<AskService> _log;
 
-    public AskService(JobDeskContext db, AskOptions opts, ILogger<AskService> log)
+    public AskService(
+        JobDeskContext db,
+        AskOptions opts,
+        DatabricksOptions dbx,
+        IDatabricksStatementClient databricks,
+        ILogger<AskService> log)
     {
         _db = db;
         _opts = opts;
+        _dbx = dbx;
+        _databricks = databricks;
         _log = log;
     }
 
@@ -35,13 +44,89 @@ public class AskService : IAskService
         if (question.Length > 500)
             question = question[..500];
 
-        var context = await BuildContextAsync(ct);
+        if (_dbx.Enabled)
+        {
+            if (!_dbx.IsConfigured)
+            {
+                var localOnly = await AnswerFromLocalAsync(question, ct);
+                return localOnly with
+                {
+                    Answer = localOnly.Answer
+                        + "\n\n(Databricks is enabled but not fully configured — no warehouse token/catalog. Answer uses local SQLite demo only.)",
+                    Source = "local+databricks-unconfigured",
+                    Error = "Databricks not configured."
+                };
+            }
+
+            var intent = AskIntentResolver.Resolve(question);
+            if (intent is null)
+                return new AskResult(AskIntentResolver.HelpText(), "databricks-help", null, null);
+
+            try
+            {
+                var sql = AskAllowlistedSql.Build(intent.Value, _dbx);
+                var query = await _databricks.ExecuteSelectAsync(sql, ct);
+                var facts = AskFactsFormatter.FormatFacts(intent.Value, query, _dbx);
+
+                if (_opts.UseBedrock)
+                {
+                    try
+                    {
+                        var answer = await BedrockAskClient.InvokeAsync(
+                            _opts,
+                            question,
+                            facts + "\nAnswer briefly using only these facts. Say if the facts are empty.",
+                            ct);
+                        if (!string.IsNullOrWhiteSpace(answer))
+                            return new AskResult(answer.Trim(), "databricks+bedrock", _opts.ModelId, null);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "Bedrock failed after Databricks facts");
+                        var plain = AskFactsFormatter.FormatDeterministic(intent.Value, query, _dbx);
+                        return new AskResult(
+                            plain + "\n\n(Bedrock unavailable — showing Databricks rows only.)",
+                            "databricks",
+                            null,
+                            ex.Message);
+                    }
+                }
+
+                return new AskResult(
+                    AskFactsFormatter.FormatDeterministic(intent.Value, query, _dbx),
+                    "databricks",
+                    null,
+                    null);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Databricks Ask path failed");
+                var fallback = await AnswerFromLocalAsync(question, ct);
+                return new AskResult(
+                    fallback.Answer
+                    + "\n\n(Databricks warehouse unavailable — answer below uses local JobDesk SQLite demo, not the synthetic warehouse.)",
+                    fallback.Source + "+databricks-fallback",
+                    fallback.ModelId,
+                    ex.Message);
+            }
+        }
+
+        return await AnswerFromLocalAsync(question, ct);
+    }
+
+    private async Task<AskResult> AnswerFromLocalAsync(string question, CancellationToken ct)
+    {
+        var context = await BuildLocalContextAsync(ct);
 
         if (_opts.UseBedrock)
         {
             try
             {
-                var answer = await InvokeBedrockAsync(question, context, ct);
+                var answer = await BedrockAskClient.InvokeAsync(
+                    _opts,
+                    question,
+                    "LOCAL SQLITE DEMO DATA (small seed — not the synthetic Databricks warehouse):\n" + context,
+                    ct);
                 if (!string.IsNullOrWhiteSpace(answer))
                     return new AskResult(answer.Trim(), "bedrock", _opts.ModelId, null);
             }
@@ -50,7 +135,7 @@ public class AskService : IAskService
                 _log.LogWarning(ex, "Bedrock Ask failed; using local fallback");
                 var fallback = HeuristicAnswer(question, context);
                 return new AskResult(
-                    fallback + "\n\n(Bedrock unavailable right now — answered from the job list instead.)",
+                    fallback + "\n\n(Bedrock unavailable right now — answered from the local demo list instead.)",
                     "fallback",
                     _opts.ModelId,
                     ex.Message);
@@ -60,7 +145,7 @@ public class AskService : IAskService
         return new AskResult(HeuristicAnswer(question, context), "local", null, null);
     }
 
-    private async Task<string> BuildContextAsync(CancellationToken ct)
+    private async Task<string> BuildLocalContextAsync(CancellationToken ct)
     {
         var customers = await _db.Customers.AsNoTracking().OrderBy(c => c.Name).ToListAsync(ct);
         var orders = await _db.WorkOrders.AsNoTracking()
@@ -87,13 +172,6 @@ public class AskService : IAskService
             .Select(g => $"{g.Key}: {g.Count()} open");
         sb.AppendLine("OPEN BY CUSTOMER: " + string.Join("; ", openByCust));
         return sb.ToString();
-    }
-
-    private async Task<string> InvokeBedrockAsync(string question, string context, CancellationToken ct)
-    {
-        // SigV4 via AWS SDK if available; otherwise we use AWSSDK.BedrockRuntime
-        // Implemented in BedrockAskClient below through injected helper.
-        return await BedrockAskClient.InvokeAsync(_opts, question, context, ct);
     }
 
     private static string HeuristicAnswer(string question, string context)
@@ -128,7 +206,8 @@ public class AskService : IAskService
                    "\nCall customer if site access needed.";
         }
 
-        return "I can answer about open jobs by customer, next scheduled work, material totals, or draft a short note. Ask one of those.\n\n" +
-               (lines.FirstOrDefault(l => l.StartsWith("OPEN BY CUSTOMER")) ?? "");
+        return "I can answer about open jobs by customer, next scheduled work, material totals, or draft a short note. "
+               + "When Databricks is enabled, try one of the allowlisted warehouse questions listed on this page.\n\n"
+               + (lines.FirstOrDefault(l => l.StartsWith("OPEN BY CUSTOMER")) ?? "");
     }
 }

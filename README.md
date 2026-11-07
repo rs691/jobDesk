@@ -62,7 +62,7 @@ NORMALIZATION.md   1NF → 2NF → 3NF using JobDesk's data
 
 | Page | What it does |
 |---|---|
-| Ask | Short natural-language answers from the seeded work-order data. **Local default:** heuristic answers only (`Ask:UseBedrock` false in `appsettings.json`). **Hosted demo:** can use Amazon Bedrock Nova Micro when IAM allows `bedrock:InvokeModel` and env/config set `Ask__UseBedrock` / `BEDROCK_MODEL_ID` (falls back to heuristics if Bedrock fails). |
+| Ask | Allowlisted read-only Q&amp;A. **Local default:** small SQLite snapshot (`Ask:UseBedrock` false). **Hosted demo:** optional Databricks synthetic warehouse (`docs/DATABRICKS-ASK.md`) via PAT Bearer env vars when parent confirms Free Edition API access; then optional Bedrock Nova Micro. Does not run arbitrary SQL. |
 | Customers | List, create, edit |
 | Work orders | List with status filter, create, edit. **Details** shows materials and photo/file attachments (upload, view, delete). |
 | Reports | Two stored-procedure reports. Each shows the proc name, what it returns, the provider, the SQL that ran, and the T-SQL definition. Includes the BUG.md toggle. |

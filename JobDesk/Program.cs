@@ -2,6 +2,7 @@ using Amazon.S3;
 using JobDesk.Data;
 using JobDesk.Hosting;
 using JobDesk.Services;
+using JobDesk.Services.Databricks;
 using JobDesk.Storage;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -72,6 +73,46 @@ var regionEnv = Environment.GetEnvironmentVariable("Ask__Region")
     ?? Environment.GetEnvironmentVariable("AWS_DEFAULT_REGION");
 if (!string.IsNullOrWhiteSpace(regionEnv)) askOpts.Region = regionEnv!;
 builder.Services.AddSingleton(askOpts);
+
+var dbxOpts = config.GetSection(DatabricksOptions.Section).Get<DatabricksOptions>() ?? new DatabricksOptions();
+dbxOpts.AccessToken =
+    Environment.GetEnvironmentVariable("Databricks__AccessToken")
+    ?? Environment.GetEnvironmentVariable("DATABRICKS_TOKEN");
+if (bool.TryParse(Environment.GetEnvironmentVariable("Databricks__Enabled"), out var dbxOn))
+    dbxOpts.Enabled = dbxOn;
+if (bool.TryParse(Environment.GetEnvironmentVariable("Ask__UseDatabricks"), out var askDbxOn))
+    dbxOpts.Enabled = askDbxOn;
+var dbxHost = Environment.GetEnvironmentVariable("Databricks__Host");
+if (!string.IsNullOrWhiteSpace(dbxHost)) dbxOpts.Host = dbxHost.Trim();
+var dbxWh = Environment.GetEnvironmentVariable("Databricks__WarehouseId");
+if (!string.IsNullOrWhiteSpace(dbxWh)) dbxOpts.WarehouseId = dbxWh.Trim();
+var dbxCat = Environment.GetEnvironmentVariable("Databricks__Catalog");
+if (!string.IsNullOrWhiteSpace(dbxCat)) dbxOpts.Catalog = dbxCat.Trim();
+var dbxSchema = Environment.GetEnvironmentVariable("Databricks__Schema");
+if (!string.IsNullOrWhiteSpace(dbxSchema)) dbxOpts.Schema = dbxSchema.Trim();
+var dbxAsOf = Environment.GetEnvironmentVariable("Databricks__AsOfDate");
+if (!string.IsNullOrWhiteSpace(dbxAsOf)) dbxOpts.AsOfDate = dbxAsOf.Trim();
+var dbxAuth = Environment.GetEnvironmentVariable("Databricks__AuthMode");
+if (!string.IsNullOrWhiteSpace(dbxAuth)
+    && Enum.TryParse<DatabricksAuthMode>(dbxAuth, ignoreCase: true, out var parsedAuth))
+    dbxOpts.AuthMode = parsedAuth;
+builder.Services.AddSingleton(dbxOpts);
+
+builder.Services.AddHttpClient<IDatabricksStatementClient, DatabricksStatementClient>((sp, client) =>
+{
+    var o = sp.GetRequiredService<DatabricksOptions>();
+    if (!string.IsNullOrWhiteSpace(o.Host))
+    {
+        var host = o.Host.Trim().TrimEnd('/');
+        if (host.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            host = host[8..];
+        if (host.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            host = host[7..];
+        client.BaseAddress = new Uri($"https://{host}/api/2.0/");
+    }
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(o.StatementTimeoutSeconds + 10, 15, 55));
+});
+
 builder.Services.AddScoped<IAskService, AskService>();
 
 // Behind a proxy (Lambda Function URL, a load balancer, a container host) the original
@@ -88,6 +129,12 @@ var app = builder.Build();
 app.Logger.LogInformation(demo.ReadOnly
     ? "Public site: writes blocked (Changes unavailable). Ask allowed."
     : "Local practice mode: create, edit, upload, and delete are enabled.");
+if (dbxOpts.Enabled)
+{
+    app.Logger.LogInformation(dbxOpts.IsConfigured
+        ? "Ask Databricks: enabled (allowlisted read-only SQL)."
+        : "Ask Databricks: enabled but missing Host/WarehouseId/Catalog/token — local SQLite fallback only.");
+}
 
 // Creates the database on first run and fills it with practice data.
 // Never deletes or alters an existing database.

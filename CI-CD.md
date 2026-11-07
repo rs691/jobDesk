@@ -9,7 +9,7 @@ Everything lives in one workflow file: [`.github/workflows/ci-cd.yml`](.github/w
 
 ## What CI does (job `build-test`)
 
-1. `dotnet restore` and `dotnet build -c Release` for .NET 8.
+1. `dotnet restore`, `dotnet build -c Release`, and `dotnet test` for .NET 8 (`JobDesk.Tests` — Databricks allowlist/auth; no live warehouse).
 2. `dotnet publish -c Release -r linux-x64 --self-contained false`, then zips the output with the files at the zip root. This is the Lambda package (about 7.7 MB). The app runs on Lambda through `Amazon.Lambda.AspNetCoreServer.Hosting` (`AddAWSLambdaHosting(LambdaEventSource.HttpApi)`, payload format 2.0), with handler `JobDesk`.
 3. Checks the zip: `JobDesk.dll`, the runtime config, and the Lambda hosting DLLs are at the root, and `appsettings.PublicDemo.json` still says read-only, SQLite, a `/tmp` database file, local (not S3) storage, and **empty** `Demo:PreparedFor`.
 4. Starts the published app in **PublicDemo** mode and runs `scripts/demo-smoke-test.sh`: the GET pages return 200 (including `/Ask`), and every mutating POST/PUT/PATCH/DELETE gets a server-side 403 with data unchanged.
