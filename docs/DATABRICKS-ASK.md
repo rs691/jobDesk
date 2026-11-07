@@ -70,6 +70,25 @@ Free Edition **unattended SQL API access is not confirmed** for this workspace. 
 
 Non-secrets in `JobDesk/appsettings.PublicDemo.json`: `Databricks:Enabled=true`, host, warehouse, schema, as-of; **`Catalog` intentionally empty** until env is set.
 
+## Troubleshooting 401 Unauthorized (live)
+
+**Ruled out for workspace `dbc-dab8e394-216d…`:** trailing-slash redirects — direct `POST /api/2.0/sql/statements` and `…/statements/` return 200 with redirects disabled; CloudWatch shows the same absolute URL with 401 (no `Location` hop).
+
+Typical causes after URL/path checks:
+
+1. **Authorization not on the wire** — older builds set `AuthenticationHeaderValue`; fix uses `TryAddWithoutValidation("Authorization", "Bearer …")` and logs **`outboundAuthorizationPresent`**, **`authorizationValueLength`**, **`patLength`** (never the secret).
+2. **`Databricks__AccessToken` empty string** — legacy `??` in `Program.cs` kept `""` and ignored `DATABRICKS_TOKEN`. Fix: `DatabricksPatLoader` treats whitespace-only as missing; prefer `DATABRICKS_TOKEN` first.
+3. **PAT pasted with `Bearer ` prefix** — normalized at runtime.
+4. **Workspace network / IP access** — same PAT can work from a laptop but fail from **AWS Lambda egress IPs** if the workspace restricts networks (often still HTTP 401). Compare a one-off Lambda curl vs local; check Databricks admin **IP access lists / firewall** settings.
+5. **Wrong host vs PAT workspace** — cold-start log: `tokenLength`, `host`, `warehouse`, `catalog`.
+
+Parent checks (no secrets) after deploying the fix branch:
+
+- Cold start: `Ask Databricks: enabled host=… tokenLength=…`
+- On Ask 401: `Databricks HTTP POST … outboundAuthorizationPresent=… bearerPrefix=… authorizationValueLength=…` then `Databricks statement create 401 … wwwAuthenticate=…`
+- If `outboundAuthorizationPresent=false` → app transport bug (header not attached).
+- If `true` and lengths match console PAT count but still 401 → token bytes on Lambda differ from laptop, stale deploy artifact, or **network policy** on Databricks side.
+
 ## Limits
 
 - `StatementTimeoutSeconds` (default 20) and poll caps fit Lambda **30s** timeout.
