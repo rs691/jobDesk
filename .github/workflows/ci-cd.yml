@@ -46,6 +46,9 @@ jobs:
       - name: Build (Release)
         run: dotnet build JobDesk.sln -c Release --no-restore
 
+      - name: Unit tests
+        run: dotnet test JobDesk.sln -c Release --no-build --verbosity normal
+
       - name: Publish Lambda package (linux-x64, framework-dependent)
         run: |
           dotnet publish JobDesk/JobDesk.csproj -c Release -r linux-x64 --self-contained false -o publish/lambda
@@ -62,6 +65,8 @@ jobs:
           done
           demo=publish/lambda/appsettings.PublicDemo.json
           test "$(jq -r '.Demo.ReadOnly' "$demo")" = "true"            || { echo "::error::PublicDemo must keep Demo.ReadOnly=true"; exit 1; }
+          prepared="$(jq -r '.Demo.PreparedFor // ""' "$demo")"
+          [ -z "$prepared" ] || { echo "::error::PublicDemo must leave Demo.PreparedFor empty (got non-empty)"; exit 1; }
           test "$(jq -r '.Database.Provider' "$demo")" = "Sqlite"      || { echo "::error::PublicDemo must use SQLite"; exit 1; }
           jq -r '.ConnectionStrings.JobDesk' "$demo" | grep -q '^Data Source=/tmp/' || { echo "::error::PublicDemo SQLite file must live in /tmp"; exit 1; }
           test "$(jq -r '.Storage.Provider' "$demo")" = "Local"        || { echo "::error::PublicDemo must not use S3"; exit 1; }

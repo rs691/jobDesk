@@ -1,0 +1,87 @@
+{
+  "synthetic": true,
+  "as_of": "2026-11-06",
+  "seed": 20261106,
+  "row_counts": {
+    "customers": 500,
+    "crews": 16,
+    "materials": 80,
+    "work_orders": 3000,
+    "material_usage": 9000,
+    "invoices": 2052,
+    "payments": 2175,
+    "activity_notes": 6000
+  },
+  "total_rows": 22823,
+  "files": {
+    "example_queries.sql": {
+      "bytes": 2606,
+      "sha256": "4a17d75987afed4446b0ae2f3765bc158afb76f622f86e2f08f36acfac4d0f3c"
+    },
+    "expected_answers.json": {
+      "bytes": 9288,
+      "sha256": "babb97bedffc594d7ef9c8f4dce1c50eb862fc70d5ca439a2b7bf5d2ad896f33"
+    },
+    "validation_results.json": {
+      "bytes": 3403,
+      "sha256": "a95dc36c7dd5ef40d8ffe27d46c393eedff62e64e6e73332534fd52e7c81ecc2"
+    },
+    "JobDesk_Synthetic_Data_Guide.docx": {
+      "bytes": 41088,
+      "sha256": "ccb6d174c8d888f102b73db6e1735f1dbf846c0e90fa706e6a1b673e7baf23aa"
+    },
+    "README.txt": {
+      "bytes": 500,
+      "sha256": "6c99883dde298fddb16d488a4ac71012e44bd03113fd26bb1cbb6ae2441f81bb"
+    },
+    "generate.py": {
+      "bytes": 21971,
+      "sha256": "26ae3404a10b12608d7cc3d36dba07b84dc024ae34e37621f53a862599e74cbd"
+    },
+    "jobdesk_synthetic.sqlite": {
+      "bytes": 2023424,
+      "sha256": "b861431c5622846855fca80d3ed6c29ff165e2e7823ac1498cc62844c937b378"
+    },
+    "setup_seed_databricks.sql": {
+      "bytes": 2203789,
+      "sha256": "5d5766287a4794c46f5dd80d8974a578ee050eaa8b5fcacfe57e29c3e476fd8f"
+    },
+    "csv/payments.csv": {
+      "bytes": 123722,
+      "sha256": "c6c820147772d8712cd2b2ade326dc43b784730e221be3fd16d71d47c35fa960"
+    },
+    "csv/material_usage.csv": {
+      "bytes": 511108,
+      "sha256": "d9e7750b153fee92568f40e7a653414774ee62905d1eb2853b44707ba66bcb50"
+    },
+    "csv/crews.csv": {
+      "bytes": 648,
+      "sha256": "9056d6f9a7237d8007936a4fe6b72d954e21a7942b4ed6f6ed0f2123930a604e"
+    },
+    "csv/work_orders.csv": {
+      "bytes": 317087,
+      "sha256": "7ee7cf377d41f80f7f13564de54a64fb895b0a3d0c818b932b3ed032ebcbdcb0"
+    },
+    "csv/customers.csv": {
+      "bytes": 41774,
+      "sha256": "19ad7ee0d207f844524789b59cd4e929238a4cf0e528b432f3db5854affe600c"
+    },
+    "csv/invoices.csv": {
+      "bytes": 151664,
+      "sha256": "f3b889f59c387a44b1b606e5bfd52a2d8089b7513a5ee242315382210dc5f4f9"
+    },
+    "csv/materials.csv": {
+      "bytes": 4754,
+      "sha256": "8ffa30dfbafab0790f51eb1406238f65d161ff50db582d9144d295bba417df94"
+    },
+    "csv/activity_notes.csv": {
+      "bytes": 661275,
+      "sha256": "add63ed412801a3d27aeb05b921017924b53872d8853d75dc4e452376ca05f88"
+    }
+  },
+  "limitations": [
+    "No live Databricks execution",
+    "SQLite query validation is not Databricks runtime validation",
+    "No cloud import, warehouse start or app wiring performed"
+  ]
+}

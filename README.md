@@ -24,7 +24,7 @@ On first run, `JobDesk/jobdesk.db` is created and seeded (`Data/SeedData.cs`). T
 | Profile | Database | File storage | Needs |
 |---|---|---|---|
 | `http` / `https` | SQLite | Local folder | Nothing |
-| `PublicDemo (read-only)` | SQLite (`jobdesk-demo.db`), sample data | Local folder | Nothing. This is the same mode as the hosted demo: a banner shows, and every write is refused. |
+| `PublicDemo (read-only)` | SQLite (`jobdesk-demo.db`), sample data | Local folder | Nothing. Matches the hosted demo: writes return **Changes unavailable** (403); create/edit/upload controls are hidden. Optional **Ask** page (Bedrock off locally unless you configure it). |
 | `SqlServer (LocalDB, stored procs)` | SQL Server LocalDB, real stored procedures | Local folder | LocalDB, which installs with Visual Studio's "ASP.NET and web development" workload |
 | `AWS S3 storage` | SQLite | Amazon S3 | A bucket name and AWS credentials (see the AWS section below) |
 
@@ -32,10 +32,10 @@ Each profile only sets `ASPNETCORE_ENVIRONMENT`, which loads `appsettings.SqlSer
 
 ## Public read-only demo mode
 
-`ASPNETCORE_ENVIRONMENT=PublicDemo` loads `appsettings.PublicDemo.json`, which sets `Demo:ReadOnly = true`, puts SQLite and uploads under `/tmp`, trusts proxy headers, and shows generic error pages. The app logs `PUBLIC DEMO MODE: read-only` at startup.
+`ASPNETCORE_ENVIRONMENT=PublicDemo` loads `appsettings.PublicDemo.json`, which sets `Demo:ReadOnly = true`, leaves `Demo:PreparedFor` empty (no “prepared for” line on the home page), puts SQLite and uploads under `/tmp`, trusts proxy headers, and shows generic error pages. The app logs that writes are blocked at startup.
 
-- **Enforced on the server, not just by hiding buttons.** `Hosting/ReadOnlyDemoMiddleware` returns **403** for every POST, PUT, PATCH, and DELETE before routing. As a second layer, `JobService` and `AttachmentService` throw if a write is attempted.
-- Every page shows a "Read-only public demo" banner, and the New, Edit, Upload, and Delete controls are hidden.
+- **Enforced on the server, not just by hiding buttons.** `ReadOnlyDemoMiddleware` returns **403** with an HTML “Changes unavailable” page for every POST, PUT, PATCH, and DELETE except **GET/HEAD** on `/Ask` (the Ask page uses GET only). As a second layer, `JobService` and `AttachmentService` throw if a write is attempted.
+- The New, Edit, Upload, and Delete controls are hidden in Razor when read-only; there is no yellow demo banner in the layout.
 - To verify, run `scripts/demo-smoke-test.sh <base-url>`. It checks the GET pages, then sends every create/edit/upload/delete endpoint with a valid antiforgery token, plus PUT/PATCH/DELETE, and confirms 403s and unchanged data.
 - **Hosting:** see [DEPLOY-AWS-LAMBDA.md](DEPLOY-AWS-LAMBDA.md) (.NET 8 Lambda + Function URL). For a beginner walkthrough of every part, see [EXPLAIN.md](EXPLAIN.md).
 - **CI/CD:** GitHub Actions builds and smoke-tests every pull request, and deploys `main` to the Lambda demo. See [CI-CD.md](CI-CD.md).
@@ -47,10 +47,10 @@ JobDesk.sln
 JobDesk/
   Models/         Customer, WorkOrder (+ WorkOrderStatus), Material, WorkOrderMaterial, WorkOrderAttachment, report rows
   Data/           JobDeskContext (EF Core), SeedData, StoredProcedureScripts (reads sql/stored-procedures.sql)
-  Services/       IJobService/JobService (CRUD + reports), IAttachmentService/AttachmentService (uploads)
+  Services/       IJobService/JobService (CRUD + reports), IAttachmentService/AttachmentService (uploads), Ask (optional Bedrock)
   Storage/        IFileStorage, LocalFileStorage, S3FileStorage, options classes
   Hosting/        DemoOptions + ReadOnlyDemoMiddleware (public demo mode)
-  Controllers/    Home, Customers, WorkOrders, Reports, Learn (thin: validate → call service → view)
+  Controllers/    Home, Customers, WorkOrders, Reports, Learn, Ask (thin: validate → call service → view)
   Views/          Razor + Bootstrap
   appsettings*.json   Database:Provider, Storage:Provider, AWS:* (no secrets)
 sql/
@@ -62,6 +62,7 @@ NORMALIZATION.md   1NF → 2NF → 3NF using JobDesk's data
 
 | Page | What it does |
 |---|---|
+| Ask | Allowlisted read-only Q&amp;A. **Local default:** small SQLite snapshot (`Ask:UseBedrock` false). **Hosted demo:** optional Databricks synthetic warehouse (`docs/DATABRICKS-ASK.md`) via PAT Bearer env vars when parent confirms Free Edition API access; then optional Bedrock Nova Micro. Does not run arbitrary SQL. |
 | Customers | List, create, edit |
 | Work orders | List with status filter, create, edit. **Details** shows materials and photo/file attachments (upload, view, delete). |
 | Reports | Two stored-procedure reports. Each shows the proc name, what it returns, the provider, the SQL that ran, and the T-SQL definition. Includes the BUG.md toggle. |

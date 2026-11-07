@@ -8,13 +8,13 @@ public class DemoOptions
 
     public bool ReadOnly { get; set; }
 
-    // Optional "who is this demo for" line on the home page. Empty hides it.
+    // Optional "prepared for" line on the home page. Empty hides it.
     public string PreparedFor { get; set; } = string.Empty;
 }
 
 public class ReadOnlyDemoException : InvalidOperationException
 {
-    public ReadOnlyDemoException() : base("This is a read-only public demo. Changes are disabled.") { }
+    public ReadOnlyDemoException() : base("Changes aren’t available on this site.") { }
 }
 
 // Blocks every request that could change data (POST, PUT, PATCH, DELETE, ...)
@@ -36,15 +36,23 @@ public class ReadOnlyDemoMiddleware
             return;
         }
 
+        // Ask is Q&A only — does not change customers/work orders/files.
+        var path = context.Request.Path.Value ?? "";
+        if (path.Equals("/Ask", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Ask/", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         context.Response.ContentType = "text/html; charset=utf-8";
         await context.Response.WriteAsync("""
-            <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Read-only demo</title>
+            <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Changes unavailable</title>
             <meta name="viewport" content="width=device-width, initial-scale=1"></head>
             <body style="font-family:system-ui,sans-serif;max-width:560px;margin:4rem auto;padding:0 1rem">
-            <h1>Read-only demo</h1>
-            <p>This public JobDesk demo uses sample data and does not allow changes.
-            Creating, editing, uploading, and deleting work in the local practice version.</p>
+            <h1>Changes unavailable</h1>
+            <p>This JobDesk site doesn’t allow creating, editing, uploading, or deleting.</p>
             <p><a href="/">Back to JobDesk</a></p></body></html>
             """);
     }

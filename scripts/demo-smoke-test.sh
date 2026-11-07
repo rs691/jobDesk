@@ -2,8 +2,9 @@
 # Smoke test for the read-only public demo.
 # Usage: scripts/demo-smoke-test.sh http://localhost:5115
 #        scripts/demo-smoke-test.sh https://<your-function-url>.lambda-url.<region>.on.aws
-# Checks that GET pages work, the demo banner shows, and every data-changing
-# request is refused server-side (403) without changing what the pages show.
+# Checks that GET pages work and every data-changing request is refused
+# server-side (403) without changing what the pages show. The public demo
+# returns "Changes unavailable" HTML for mutations (no read-only banner).
 set -u
 BASE="${1:?Pass the base URL, e.g. http://localhost:5115}"
 BASE="${BASE%/}"
@@ -12,10 +13,11 @@ check() { if [ "$2" = "$3" ]; then echo "PASS  $1"; pass=$((pass+1)); else echo 
 rows() { curl -s "$BASE$1" | grep -c '<tr>'; }
 
 echo "== GET pages"
-for p in / /Customers /WorkOrders "/WorkOrders?status=Open" /WorkOrders/Details/1 /Reports "/Reports?buggy=true" "/Reports?customerId=2" /Learn/Normalization /Customers/Create /WorkOrders/Create /Customers/Edit/1 /WorkOrders/Edit/1; do
+for p in / /Ask /Customers /WorkOrders "/WorkOrders?status=Open" /WorkOrders/Details/1 /Reports "/Reports?buggy=true" "/Reports?customerId=2" /Learn/Normalization /Customers/Create /WorkOrders/Create /Customers/Edit/1 /WorkOrders/Edit/1; do
   check "GET $p" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p")" 200
 done
-check "Read-only banner on home page" "$(curl -s "$BASE/" | grep -c 'Read-only public demo')" 1
+check "Ask page loads" "$(curl -s "$BASE/Ask" | grep -c 'Ask JobDesk')" 1
+check "No old read-only banner copy" "$(curl -s "$BASE/" | grep -c 'Read-only public demo')" 0
 check "Upload form hidden on Details" "$(curl -s "$BASE/WorkOrders/Details/1" | grep -c 'enctype="multipart/form-data"')" 0
 check "X-Content-Type-Options header" "$(curl -s -D - -o /dev/null "$BASE/" | grep -ci '^x-content-type-options: nosniff')" 1
 
