@@ -6,6 +6,39 @@ The path to walk through is **Razor view → controller → service → EF Core 
 
 **Stack:** .NET 8, ASP.NET Core MVC, EF Core 8 (SQLite by default, SQL Server optional), AWS SDK for .NET (S3), Razor + Bootstrap. One solution, one web project.
 
+## System rundown (as of 2026-11-07, 22:10 CST)
+
+**Status:** The hosted **public demo paths were verified** on 2026-11-07 (~19:25 CST): Databricks facts plus Bedrock explanation matched the synthetic warehouse (3,000 work orders; outstanding invoice balance **$1,605,134.49** on fictional as-of **2026-11-06**). Later the same evening, **cost protection** set **reserved concurrency to 0** on the `jobdesk-demo` and `ops-ai-pilot-draft` Lambda functions so they do not execute until re-enabled. That is **not** a hard account spending cap—other retained services can still incur charges. **Do not assume the live URL is online.**
+
+| | |
+|---|---|
+| **What** | Practice work-order MVC app (customers, jobs, materials, reports, normalization lesson, optional **Ask**). |
+| **Why** | Interview-style full stack: EF Core, parameterized SQL/procs, read-only public demo, repeatable CI/CD. |
+| **How** | Razor → controllers → services → SQLite or SQL Server; files via local folder or S3 interface. Hosted demo: .NET 8 on Lambda + Function URL, GitHub Actions **OIDC** deploy ([CI-CD.md](CI-CD.md)). |
+
+**Two datasets (not one database):** ordinary pages use the **small SQLite** practice snapshot (seeded locally). **Ask** can query a separate **synthetic Databricks** schema (`workspace.jobdesk_synthetic`, **8 tables**, **22,823 rows** per [sql/synthetic/manifest.json](sql/synthetic/manifest.json))—ordinary views are **not** warehouse truth. Failed warehouse calls fall back to the **local** list with explicit `source` labels (`databricks+bedrock`, `databricks`, `bedrock+databricks-fallback`, `databricks-help`, etc.; see [docs/DATABRICKS-ASK.md](docs/DATABRICKS-ASK.md)).
+
+**Ask AI today (verified in code):** natural language is mapped to **10 allowlisted SELECT intents** only ([`AskIntent`](JobDesk/Services/Databricks/AskIntent.cs), [sql/synthetic/example_queries.sql](sql/synthetic/example_queries.sql))—**no arbitrary or model-generated SQL**. SQL computes facts; when enabled, **Amazon Bedrock Nova Micro** (`amazon.nova-micro-v1:0`) explains the supplied rows. Limits: read-only demo, row caps, no writes/email/purchasing/autonomous agents.
+
+**Separate (not JobDesk):** **Ops AI Pilot** draft work (**notes → template JSON → SQS approval queue**, reference files in S3) is **groundwork only**—no queue-triggered executor, no integration with this app. Also paused (concurrency 0).
+
+### Data flow (logical)
+
+![JobDesk logical data flow: browser to Lambda-hosted MVC app; Ask path through allowlisted SQL to Databricks warehouse and optional Bedrock Nova Micro; ordinary pages use SQLite; deploy via GitHub Actions OIDC.](docs/assets/jobdesk-data-flow.png)
+
+Editable diagram: [docs/assets/jobdesk-data-flow.drawio](docs/assets/jobdesk-data-flow.drawio) (logical flow, not a network/security map).
+
+### Agent roadmap (**proposed**, not implemented)
+
+| Phase | Goal |
+|---|---|
+| 1 | Stay local-first: tests for all 10 intents, failures, labels; add auth, rate limits, token caps, manual stop before paid runs. |
+| 2 | Make provenance obvious in UI (dataset, as-of, fallback warnings). |
+| 3 | Offline prototype: read-only tools → structured draft (job IDs, reasons) → **human review**; mock model first. |
+| 4 | Later: bounded steps, audit logs, idempotency—optional narrow executor only after explicit approval (no automatic financial or external actions). |
+
+---
+
 ## Run it
 
 **Visual Studio 2022 (17.8+):** open `JobDesk.sln`, then press **F5**. The default `http` profile uses SQLite and local file storage, and needs no setup.
