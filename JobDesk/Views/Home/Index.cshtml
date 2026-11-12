@@ -2,8 +2,7 @@
     ViewData["Title"] = "Home";
 }
 
-<h1 class="h3 mb-1">JobDesk</h1>
-<p class="text-muted mb-4">Work orders and customers. Quick reports.</p>
+<partial name="_WelcomePanel" />
 
 @if (!string.IsNullOrWhiteSpace(DemoMode.PreparedFor))
 {
@@ -11,12 +10,13 @@
         <div class="card-body small">
             <div class="fw-semibold mb-1">Prepared for @DemoMode.PreparedFor</div>
             <p class="mb-0 text-muted">
-                This sample app uses invented field-service data. It is not connected to any employer’s systems.
+                This app uses invented field-service data. It is not connected to any employer’s systems.
             </p>
         </div>
     </div>
 }
 
+<h2 class="h5 mb-3">At a glance</h2>
 <div class="row g-3 mb-4">
     <div class="col-sm-4">
         <a class="card text-decoration-none h-100" asp-controller="Customers" asp-action="Index">
@@ -43,10 +43,3 @@
         </a>
     </div>
 </div>
-
-<ul class="list-unstyled mb-0">
-    <li class="mb-2"><a asp-controller="Ask" asp-action="Index">Ask</a> <span class="text-muted small">— short Q&amp;A from the job list (optional Amazon Bedrock in the hosted demo)</span></li>
-    <li class="mb-2"><a asp-controller="Reports" asp-action="Index">Reports</a> <span class="text-muted small">— open jobs by customer</span></li>
-    <li class="mb-2"><a asp-controller="Learn" asp-action="Normalization">Normalization notes</a> <span class="text-muted small">— 1NF/2NF/3NF from this data</span></li>
-    <li class="mb-2"><a asp-controller="WorkOrders" asp-action="Details" asp-route-id="1">Work order #1</a> <span class="text-muted small">— materials + file uploads</span></li>
-</ul>

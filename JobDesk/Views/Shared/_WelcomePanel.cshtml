@@ -1,0 +1,38 @@
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <h1 class="h3 mb-2">Welcome to JobDesk</h1>
+        <p class="mb-3">
+            JobDesk is a work-order and operations app for a field-service business (installation crews, dispatch, materials).
+            Robert Stewart built it with C# / ASP.NET Core and SQL, hosts it on AWS Lambda, and deploys with GitHub Actions.
+        </p>
+
+        <h2 class="h6 text-uppercase text-muted mb-2">Try these</h2>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <a class="btn btn-primary" asp-controller="WorkOrders" asp-action="Index">Work orders</a>
+            <a class="btn btn-outline-primary" asp-controller="Reports" asp-action="Index">Reports</a>
+            <a class="btn btn-outline-dark" asp-controller="Ask" asp-action="Index">Ask</a>
+        </div>
+        <ul class="small text-muted mb-3">
+            <li class="mb-1"><strong class="text-body">Work orders</strong> — search and filter jobs by status, customer, and crew.</li>
+            <li class="mb-1"><strong class="text-body">Reports</strong> — totals by status, open jobs, and outstanding balance.</li>
+            <li class="mb-1">
+                <strong class="text-body">Ask</strong> — type a plain-English question about the data. Examples:
+                <a asp-controller="Ask" asp-action="Index" asp-route-q="Work orders by status">Work orders by status</a>,
+                <a asp-controller="Ask" asp-action="Index" asp-route-q="Outstanding invoice balance">Outstanding invoice balance</a>,
+                <a asp-controller="Ask" asp-action="Index" asp-route-q="Overdue open work by crew">Overdue open work by crew</a>.
+            </li>
+        </ul>
+
+        <p class="small text-muted mb-3">
+            All numbers and names are fictional sample data (about 3,000 work orders plus customers, crews, and invoices).
+            Creating, editing, and uploads are turned off on this site so the data stays clean.
+        </p>
+
+        <p class="small mb-0 text-muted">
+            <span class="text-body">How it works:</span>
+            Browser → ASP.NET Core on AWS Lambda → SQL data;
+            Ask → Amazon Bedrock over Databricks.
+            <a href="https://github.com/rs691/jobDesk" target="_blank" rel="noopener noreferrer">Source on GitHub</a>.
+        </p>
+    </div>
+</div>
